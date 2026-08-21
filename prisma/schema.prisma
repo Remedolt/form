@@ -1,0 +1,82 @@
+// Form Yönetim & Admin Panel — Prisma Schema
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  MASTER_ADMIN
+  ADMIN
+  USER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  formsCreated    Form[]           @relation("FormCreator")
+  formAssignments FormAssignment[]
+
+  @@map("users")
+}
+
+model Form {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  /// Dinamik alan tanımları: FormFieldDefinition[] (bkz. src/types/form.ts)
+  fields      Json
+  isPublished Boolean  @default(true) @map("is_published")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy   User              @relation("FormCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  submissions FormSubmission[]
+  assignments FormAssignment[]
+
+  @@index([createdById])
+  @@index([isPublished])
+  @@map("forms")
+}
+
+/// Admin'e atanmış formlar (oluşturmadığı ama erişebildiği)
+model FormAssignment {
+  id         String   @id @default(cuid())
+  formId     String   @map("form_id")
+  adminId    String   @map("admin_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  form  Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+  admin User @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, adminId])
+  @@index([adminId])
+  @@map("form_assignments")
+}
+
+model FormSubmission {
+  id             String   @id @default(cuid())
+  formId         String   @map("form_id")
+  /// Doldurulan cevaplar: Record<fieldId, value>
+  data           Json
+  submitterEmail String?  @map("submitter_email")
+  submittedAt    DateTime @default(now()) @map("submitted_at")
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([submittedAt])
+  @@map("form_submissions")
+}
